@@ -1,0 +1,22 @@
+# Smaller transformer for laptop / real pilot grids (fewer parameters, shorter sequences).
+name: "temporal_transformer"
+params:
+  d_model: 64
+  nhead: 4
+  num_encoder_layers: 2
+  dim_feedforward: 128
+  dropout: 0.1
+  max_seq_len: 16
+
+training:
+  batch_size: 64
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  max_epochs: 15
+  grad_clip_norm: 1.0
+  early_stopping_patience: 4
+
+loss:
+  occurrence_weight: 1.0
+  severity_weight: 0.5
+  severity_mask_non_fire: true

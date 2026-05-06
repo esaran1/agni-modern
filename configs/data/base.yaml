@@ -1,0 +1,104 @@
+version: 1
+aoi:
+  country: "Indonesia"
+  boundary_source: "TODO_CONFIGURE_BOUNDARY_SOURCE"
+
+spatial:
+  grid_km: 5
+  crs: "EPSG:4326"
+  patch_id_template: "indo_{row}_{col}"
+
+temporal:
+  reference_start: "2019-01-01"
+  reference_end: "2023-12-31"
+  reference_frequency: "7D"
+  lookback_days: 180
+  horizons_days: [7, 30, 60]
+
+cloud_quality:
+  primary_source: "sentinel2_cloud_probability"
+  auxiliary_source: "cloud_score_plus"
+  strategy: "primary_with_auxiliary_qa"
+  notes: "Use Sentinel-2 Cloud Probability as main cloud mask; use Cloud Score+ as auxiliary clear-pixel QA."
+
+sources:
+  sentinel2_sr:
+    dataset_id: "COPERNICUS/S2_SR_HARMONIZED"
+    enabled: true
+    role: "optical_imagery"
+    notes: "Primary optical source for spectral/vegetation/burn-context features up to reference_date."
+    required_bands: ["TODO_B2", "TODO_B3", "TODO_B4", "TODO_B8", "TODO_B11", "TODO_B12"]
+
+  sentinel2_cloud_probability:
+    dataset_id: "COPERNICUS/S2_CLOUD_PROBABILITY"
+    enabled: true
+    role: "cloud_mask_primary"
+    notes: "Primary cloud/shadow quality mask for Sentinel-2 composites."
+    required_properties: ["TODO_CLOUD_PROBABILITY_FIELD"]
+
+  cloud_score_plus:
+    dataset_id: "GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED"
+    enabled: true
+    role: "cloud_mask_auxiliary"
+    notes: "Auxiliary clear-pixel QA signal used alongside Sentinel-2 Cloud Probability."
+    required_properties: ["TODO_CLOUD_SCORE_PLUS_FIELD"]
+
+  era5_land_daily:
+    dataset_id: "ECMWF/ERA5_LAND/DAILY_AGGR"
+    enabled: true
+    role: "weather_context"
+    notes: "Daily weather and land-surface context over lookback window."
+    variables: ["TODO_TEMP", "TODO_PRECIP", "TODO_WIND"]
+
+  viirs_active_fire:
+    dataset_id: "NASA/LANCE/SNPP_VIIRS/C2"
+    enabled: true
+    role: "occurrence_label_source"
+    notes: "Future-window active-fire detections for horizon occurrence labels."
+    required_properties: ["TODO_CONFIDENCE_FIELD", "TODO_BRIGHTNESS_FIELD"]
+
+  modis_burned_area:
+    dataset_id: "MODIS/061/MCD64A1"
+    enabled: true
+    role: "severity_label_support"
+    notes: "Burn timing/extent support when constructing severity labels from pre/post composites."
+    required_properties: ["TODO_BURN_DATE_FIELD", "TODO_BURNED_AREA_FIELD"]
+
+  srtm:
+    dataset_id: "CGIAR/SRTM90_V4"
+    enabled: true
+    role: "terrain_static"
+    notes: "Static terrain context such as elevation/slope/aspect."
+
+  dynamic_world:
+    dataset_id: "GOOGLE/DYNAMICWORLD/V1"
+    enabled: true
+    role: "landcover_context"
+    notes: "Land-cover class fractions and transitions for context features."
+    required_properties: ["TODO_DYNAMIC_WORLD_LABEL_FIELD"]
+
+  worldpop:
+    dataset_id: "WorldPop/GP/100m/pop"
+    enabled: true
+    role: "human_pressure_population"
+    notes: "Population-based human-pressure features."
+    required_properties: ["TODO_POPULATION_FIELD"]
+
+  ghsl_built_surface:
+    dataset_id: "JRC/GHSL/P2023A/GHS_BUILT_S"
+    enabled: true
+    role: "human_pressure_built_environment"
+    notes: "Built-environment proxy for settlement and anthropogenic pressure."
+    required_properties: ["TODO_BUILT_SURFACE_FIELD"]
+
+io:
+  raw_dir: "data/raw"
+  interim_dir: "data/interim"
+  processed_dir: "data/processed"
+  patch_grid_path: "data/interim/patch_grid.parquet"
+  dataset_path: "data/processed/patch_date_table.parquet"
+  partition_cols: ["reference_year"]
+
+quality:
+  enforce_unique_patch_date: true
+  enforce_feature_time_leakage_guard: true

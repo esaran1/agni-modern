@@ -1,0 +1,92 @@
+version: 1
+aoi:
+  country: "Indonesia"
+  pilot_region_name: "central_kalimantan_severity"
+  pilot_bbox:
+    min_lon: 113.0
+    min_lat: -3.0
+    max_lon: 114.5
+    max_lat: -1.5
+
+spatial:
+  grid_km: 10
+  crs: "EPSG:4326"
+  patch_id_template: "pilot_{row}_{col}"
+
+temporal:
+  # Full 2023 dry season (Jun–Nov) gives ~6 months of data.
+  # This significantly increases the number of burn events (and hence
+  # severity-available rows) compared to the Aug–Oct pilot.
+  reference_start: "2023-06-01"
+  reference_end: "2023-11-30"
+  reference_frequency: "7D"
+  lookback_days: 60
+  horizons_days: [7, 30, 60]
+
+cloud_quality:
+  primary_source: "sentinel2_cloud_probability"
+  auxiliary_source: "cloud_score_plus"
+  strategy: "primary_with_auxiliary_qa"
+  notes: "Extended dry-season pilot for severity coverage."
+
+sources:
+  sentinel2_sr:
+    dataset_id: "COPERNICUS/S2_SR_HARMONIZED"
+    enabled: true
+    role: "optical_imagery"
+    notes: "Lookback median composite for optical features."
+    required_bands: ["B2", "B3", "B4", "B8", "B11", "B12"]
+
+  sentinel2_cloud_probability:
+    dataset_id: "COPERNICUS/S2_CLOUD_PROBABILITY"
+    enabled: true
+    role: "cloud_mask_primary"
+    notes: "Cloud probability for optical QA."
+    required_properties: ["probability"]
+
+  cloud_score_plus:
+    dataset_id: "GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED"
+    enabled: true
+    role: "cloud_mask_auxiliary"
+    notes: "Auxiliary clear-pixel QA."
+    required_properties: ["cs", "cs_cdf"]
+
+  era5_land_daily:
+    dataset_id: "ECMWF/ERA5_LAND/DAILY_AGGR"
+    enabled: true
+    role: "weather_context"
+    notes: "Temperature, precipitation, wind over lookback."
+    variables: ["temperature_2m", "total_precipitation_sum", "u_component_of_wind_10m"]
+
+  srtm:
+    dataset_id: "CGIAR/SRTM90_V4"
+    enabled: true
+    role: "terrain_static"
+    notes: "Static elevation."
+    required_bands: ["elevation"]
+
+  viirs_active_fire:
+    dataset_id: "MODIS/061/MOD14A1"
+    enabled: true
+    role: "occurrence_label_source"
+    notes: "MODIS thermal anomalies for fire occurrence. FireMask >= 7 = fire."
+    required_bands: ["FireMask"]
+
+  burn_severity:
+    dataset_id: "MODIS/061/MCD64A1"
+    enabled: true
+    role: "severity_label_source"
+    notes: "MODIS burned area to drive pre/post-fire S2 NBR composites for severity labels."
+    required_bands: ["BurnDate"]
+
+io:
+  raw_dir: "data/raw"
+  interim_dir: "data/interim"
+  processed_dir: "data/processed"
+  patch_grid_path: "data/interim/pilot_kalimantan_severity_grid.parquet"
+  dataset_path: "data/processed/pilot_kalimantan_severity_dataset.parquet"
+  partition_cols: ["reference_year"]
+
+quality:
+  enforce_unique_patch_date: true
+  enforce_feature_time_leakage_guard: true

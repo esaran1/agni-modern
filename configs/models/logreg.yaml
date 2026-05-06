@@ -1,0 +1,6 @@
+name: "logreg"
+params:
+  penalty: "l2"
+  C: 1.0
+  class_weight: "balanced"
+  max_iter: 2000

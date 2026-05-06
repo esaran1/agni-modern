@@ -1,0 +1,35 @@
+# Temporal transformer on the same real pilot Parquet as tabular baselines.
+# Uses the same temporal split as pilot_kalimantan_expanded for comparability.
+experiment:
+  name: "pilot_kalimantan_transformer"
+  seed: 42
+
+includes:
+  data: "configs/data/pilot_kalimantan_expanded.yaml"
+  features: "configs/features/base.yaml"
+  model: "configs/models/transformer_pilot.yaml"
+
+task:
+  type: "multitask"
+  horizon_days: 30
+
+split:
+  strategy: "temporal_holdout"
+  train_end: "2023-09-21"
+  val_end: "2023-10-07"
+  test_end: "2023-10-31"
+
+outputs:
+  model_dir: "outputs/models"
+  metrics_dir: "outputs/metrics"
+  predictions_dir: "outputs/predictions"
+  plots_dir: "outputs/plots"
+  maps_dir: "outputs/maps"
+
+train:
+  device: "cpu"
+  batch_size: 64
+
+eval:
+  spatial_holdout_auto: true
+  spatial_holdout_fraction: 0.25

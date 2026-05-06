@@ -1,0 +1,31 @@
+experiment:
+  name: "pilot_kalimantan_severity"
+  seed: 42
+
+includes:
+  data: "configs/data/pilot_kalimantan_severity.yaml"
+  features: "configs/features/base.yaml"
+  model: "configs/models/xgb_occurrence.yaml"
+
+task:
+  type: "all"
+  mode: "real_pilot"
+  horizon_days: 30
+  baseline_models: ["logreg", "random_forest", "xgb_occurrence"]
+  severity_models: ["xgb_severity_cls", "xgb_severity_reg"]
+
+split:
+  strategy: "temporal_holdout"
+  # Jun–Sep for train, Oct for val, Nov for test.
+  # This puts the peak late-season burn events in val/test where
+  # severity diversity is higher.
+  train_end: "2023-09-30"
+  val_end: "2023-10-31"
+  test_end: "2023-11-30"
+
+outputs:
+  model_dir: "outputs/models"
+  metrics_dir: "outputs/metrics"
+  predictions_dir: "outputs/predictions"
+  plots_dir: "outputs/plots"
+  maps_dir: "outputs/maps"

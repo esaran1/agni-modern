@@ -1,0 +1,22 @@
+experiment:
+  name: "baseline_occurrence_7d"
+  seed: 42
+
+includes:
+  data: "configs/data/base.yaml"
+  features: "configs/features/base.yaml"
+  model: "configs/models/xgb_occurrence.yaml"
+
+task:
+  type: "occurrence"
+  horizon_days: 7
+
+split:
+  strategy: "temporal_holdout"
+  train_end: "2021-12-31"
+  val_end: "2022-12-31"
+  test_end: "2023-12-31"
+
+outputs:
+  model_dir: "outputs/models"
+  metrics_dir: "outputs/metrics"

@@ -1,0 +1,82 @@
+version: 1
+aoi:
+  country: "Indonesia"
+  pilot_region_name: "jambi_small"
+  pilot_bbox:
+    min_lon: 102.0
+    min_lat: -1.8
+    max_lon: 103.2
+    max_lat: -0.8
+
+spatial:
+  grid_km: 10
+  crs: "EPSG:4326"
+  patch_id_template: "pilot_{row}_{col}"
+
+temporal:
+  reference_start: "2020-06-01"
+  reference_end: "2020-09-30"
+  reference_frequency: "14D"
+  lookback_days: 60
+  horizons_days: [30]
+
+cloud_quality:
+  primary_source: "sentinel2_cloud_probability"
+  auxiliary_source: "cloud_score_plus"
+  strategy: "primary_with_auxiliary_qa"
+  notes: "Pilot mode uses Sentinel-2 cloud probability as primary and Cloud Score+ for auxiliary QA checks."
+
+sources:
+  sentinel2_sr:
+    dataset_id: "COPERNICUS/S2_SR_HARMONIZED"
+    enabled: true
+    role: "optical_imagery"
+    notes: "Pilot optical features from lookback composite."
+    required_bands: ["B2", "B3", "B4", "B8", "B11", "B12"]
+
+  sentinel2_cloud_probability:
+    dataset_id: "COPERNICUS/S2_CLOUD_PROBABILITY"
+    enabled: true
+    role: "cloud_mask_primary"
+    notes: "Primary cloud quality source for optical confidence features."
+    required_properties: ["probability"]
+
+  cloud_score_plus:
+    dataset_id: "GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED"
+    enabled: true
+    role: "cloud_mask_auxiliary"
+    notes: "Auxiliary clear-pixel QA signal."
+    required_properties: ["TODO_CLOUD_SCORE_PLUS_FIELD"]
+
+  era5_land_daily:
+    dataset_id: "ECMWF/ERA5_LAND/DAILY_AGGR"
+    enabled: true
+    role: "weather_context"
+    notes: "Pilot weather summaries over the lookback window."
+    variables: ["TODO_TEMP", "TODO_PRECIP", "TODO_WIND"]
+
+  srtm:
+    dataset_id: "CGIAR/SRTM90_V4"
+    enabled: true
+    role: "terrain_static"
+    notes: "Static terrain summary."
+    required_bands: ["elevation"]
+
+  viirs_active_fire:
+    dataset_id: "NASA/LANCE/SNPP_VIIRS/C2"
+    enabled: true
+    role: "occurrence_label_source"
+    notes: "30-day future occurrence labels from active fire detections."
+    required_properties: ["TODO_VIIRS_CONFIDENCE_FIELD"]
+
+io:
+  raw_dir: "data/raw"
+  interim_dir: "data/interim"
+  processed_dir: "data/processed"
+  patch_grid_path: "data/interim/pilot_jambi_patch_grid.parquet"
+  dataset_path: "data/processed/pilot_jambi_occurrence_dataset.parquet"
+  partition_cols: ["reference_year"]
+
+quality:
+  enforce_unique_patch_date: true
+  enforce_feature_time_leakage_guard: true

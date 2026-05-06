@@ -1,0 +1,13 @@
+name: "xgb_severity_reg"
+params:
+  objective: "reg:squarederror"
+  eval_metric: "rmse"
+  n_estimators: 1200
+  learning_rate: 0.03
+  max_depth: 8
+  subsample: 0.85
+  colsample_bytree: 0.85
+  reg_lambda: 1.0
+  random_state: 42
+  tree_method: "hist"
+  early_stopping_rounds: 60

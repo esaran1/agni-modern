@@ -1,0 +1,23 @@
+experiment:
+  name: "multitask_transformer"
+  seed: 42
+
+includes:
+  data: "configs/data/base.yaml"
+  features: "configs/features/base.yaml"
+  model: "configs/models/transformer.yaml"
+
+task:
+  type: "multitask"
+  horizons_days: [7, 30, 60]
+  severity_mode: "conditional"
+
+split:
+  strategy: "spatial_holdout"
+  holdout_regions: ["TODO_REGION_1", "TODO_REGION_2"]
+  val_fraction: 0.1
+  test_fraction: 0.2
+
+outputs:
+  model_dir: "outputs/models"
+  metrics_dir: "outputs/metrics"

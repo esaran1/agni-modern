@@ -1,0 +1,40 @@
+version: 1
+
+feature_families:
+  spectral: true
+  vegetation: true
+  burn_indices: true
+  weather: true
+  terrain: true
+  landcover: true
+  human_pressure: true
+  temporal_rolling: true
+
+spectral:
+  reducers: ["mean", "std", "p25", "p50", "p75"]
+
+vegetation:
+  indices: ["ndvi", "ndmi", "evi"]
+
+burn_indices:
+  indices: ["nbr", "dnbr_proxy_prefire_only"]
+
+weather:
+  rolling_windows_days: [7, 14, 30, 60, 90]
+  aggregations: ["mean", "min", "max", "sum", "std"]
+
+terrain:
+  features: ["elevation", "slope", "aspect"]
+
+landcover:
+  classes: ["water", "trees", "grass", "flooded_vegetation", "crops", "built_area", "bare", "snow_ice"]
+
+human_pressure:
+  features:
+    - "population_density_worldpop"
+    - "built_surface_fraction_ghsl"
+    - "distance_to_settlement_proxy"
+
+temporal_rolling:
+  enabled: true
+  stats: ["mean", "std", "trend"]

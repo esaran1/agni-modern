@@ -1,0 +1,33 @@
+experiment:
+  name: "pilot_kalimantan_expanded"
+  seed: 42
+
+includes:
+  data: "configs/data/pilot_kalimantan_expanded.yaml"
+  features: "configs/features/base.yaml"
+  model: "configs/models/xgb_occurrence.yaml"
+
+task:
+  type: "all"
+  mode: "real_pilot"
+  horizon_days: 30
+  baseline_models: ["logreg", "random_forest", "xgb_occurrence"]
+  severity_models: ["xgb_severity_cls", "xgb_severity_reg"]
+
+split:
+  strategy: "temporal_holdout"
+  train_end: "2023-09-21"
+  val_end: "2023-10-07"
+  test_end: "2023-10-31"
+
+outputs:
+  model_dir: "outputs/models"
+  metrics_dir: "outputs/metrics"
+  predictions_dir: "outputs/predictions"
+  plots_dir: "outputs/plots"
+  maps_dir: "outputs/maps"
+
+# Auto-derive spatial holdout rows (highest grid row indices) for evaluate.py
+eval:
+  spatial_holdout_auto: true
+  spatial_holdout_fraction: 0.25

@@ -1,0 +1,30 @@
+experiment:
+  name: "synthetic_severity"
+  seed: 2026
+
+includes:
+  data: "configs/data/base.yaml"
+  features: "configs/features/base.yaml"
+  model: "configs/models/xgb_severity_cls.yaml"
+
+task:
+  type: "severity_both"
+  mode: "synthetic"
+  severity_models: ["xgb_severity_cls", "xgb_severity_reg"]
+  synthetic:
+    enabled: true
+    seed: 2026
+    num_patches: 40
+    num_reference_dates: 72
+    start_date: "2021-01-01"
+    frequency_days: 7
+
+split:
+  strategy: "temporal_holdout"
+  train_end: "2021-12-31"
+  val_end: "2022-03-31"
+  test_end: "2022-06-30"
+
+outputs:
+  model_dir: "outputs/models"
+  metrics_dir: "outputs/metrics"
