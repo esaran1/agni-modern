@@ -18,6 +18,9 @@ split:
   train_end: "2023-09-21"
   val_end: "2023-10-07"
   test_end: "2023-10-31"
+  # Same frozen spatial holdout as pilot_kalimantan_expanded so transformer
+  # vs tabular comparisons are evaluated on identical held-out geography.
+  holdout_regions: ["pilot_5_", "pilot_6_", "pilot_7_", "pilot_8_"]
 
 outputs:
   model_dir: "outputs/models"
@@ -31,5 +34,5 @@ train:
   batch_size: 64
 
 eval:
-  spatial_holdout_auto: true
+  spatial_holdout_auto: false
   spatial_holdout_fraction: 0.25

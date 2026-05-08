@@ -19,6 +19,10 @@ split:
   train_end: "2023-09-21"
   val_end: "2023-10-07"
   test_end: "2023-10-31"
+  # Frozen via scripts/select_spatial_holdout.py — top-scoring contiguous
+  # row band (n=272, n_pos=40, prevalence=0.147) for reproducible spatial
+  # generalisation comparisons across runs.
+  holdout_regions: ["pilot_5_", "pilot_6_", "pilot_7_", "pilot_8_"]
 
 outputs:
   model_dir: "outputs/models"
@@ -27,7 +31,9 @@ outputs:
   plots_dir: "outputs/plots"
   maps_dir: "outputs/maps"
 
-# Auto-derive spatial holdout rows (highest grid row indices) for evaluate.py
+# Spatial holdout is frozen above; auto mode left off so reruns are stable.
+# When auto=true, evaluate.py uses the smart selector that requires the
+# candidate band to contain min_positive samples.
 eval:
-  spatial_holdout_auto: true
+  spatial_holdout_auto: false
   spatial_holdout_fraction: 0.25

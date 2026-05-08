@@ -19,7 +19,11 @@ import pandas as pd
 import typer
 
 from agni_modern.evaluation.reporting import save_json_report
-from agni_modern.evaluation.splits import auto_spatial_holdout_prefixes
+from agni_modern.evaluation.spatial_holdout_selection import select_spatial_holdout
+from agni_modern.evaluation.splits import (
+    auto_spatial_holdout_prefixes,
+    temporal_holdout_split,
+)
 from agni_modern.evaluation.unified import (
     build_comparison_table,
     discover_prediction_files,
@@ -33,6 +37,52 @@ from agni_modern.evaluation.unified import (
 from agni_modern.training.utils import _sanitize_for_json
 from agni_modern.utils.config_loader import load_experiment_config
 from agni_modern.visualization.calibration_plot import save_reliability_diagram
+
+
+def _auto_spatial_prefixes(cfg) -> list[str]:
+    """Return spatial-holdout patch prefixes derived from the test split.
+
+    Prefers the contiguous-row-band selector
+    (:func:`select_spatial_holdout`) which requires the candidate band to
+    contain enough positive samples to be evaluable.  Falls back to the
+    naive top-rows picker if the smart selector returns nothing (e.g. empty
+    test split or a non-grid patch_id scheme).
+    """
+    horizon = int(cfg.task.get("horizon_days", 30))
+    target_col = f"y_occ_{horizon}d"
+
+    try:
+        df = pd.read_parquet(cfg.data.io.dataset_path)
+    except FileNotFoundError:
+        return []
+
+    if "patch_id" not in df.columns:
+        return []
+
+    train_end = cfg.split.train_end or "2021-12-31"
+    val_end = cfg.split.val_end or "2022-12-31"
+    test_end = cfg.split.test_end or "2023-12-31"
+    _, _, test_df = temporal_holdout_split(df, train_end, val_end, test_end)
+
+    if not test_df.empty and target_col in test_df.columns:
+        candidate = select_spatial_holdout(
+            test_df,
+            target_col=target_col,
+            target_fraction=cfg.eval.spatial_holdout_fraction,
+        )
+        if candidate is not None:
+            if not candidate.meets_criteria:
+                typer.echo(
+                    "WARNING: best spatial holdout candidate did not meet "
+                    f"min-positive/min-prevalence thresholds (n_pos={candidate.n_positive}, "
+                    f"prev={candidate.prevalence:.3f}). Reporting metrics anyway — "
+                    "treat spatial generalisation numbers with caution."
+                )
+            return list(candidate.prefixes)
+
+    return auto_spatial_holdout_prefixes(
+        df["patch_id"], holdout_fraction=cfg.eval.spatial_holdout_fraction,
+    )
 
 app = typer.Typer(add_completion=False)
 
@@ -52,14 +102,11 @@ def main(
 
     holdout_regions = list(dict.fromkeys([*spatial_holdout, *list(cfg.split.holdout_regions or [])]))
     if cfg.eval.spatial_holdout_auto:
-        patch_ids = pd.read_parquet(cfg.data.io.dataset_path, columns=["patch_id"])["patch_id"]
-        auto_prefixes = auto_spatial_holdout_prefixes(
-            patch_ids, holdout_fraction=cfg.eval.spatial_holdout_fraction
-        )
+        auto_prefixes = _auto_spatial_prefixes(cfg)
         if auto_prefixes:
             typer.echo(
-                f"Auto spatial holdout ({cfg.eval.spatial_holdout_fraction:.0%} of grid rows): "
-                f"{auto_prefixes}"
+                f"Auto spatial holdout ({cfg.eval.spatial_holdout_fraction:.0%} of grid rows, "
+                f"smart-selected for positives): {auto_prefixes}"
             )
             holdout_regions = sorted(set(holdout_regions) | set(auto_prefixes))
         else:
@@ -193,6 +240,19 @@ def main(
         if "spatial_n_samples" in metrics or "spatial_n" in metrics:
             sn = metrics.get("spatial_n_samples", metrics.get("spatial_n", 0))
             parts.append(f"spatial_n={sn}")
+            if task == "occurrence":
+                sp_prev = metrics.get("spatial_prevalence")
+                sp_f1 = metrics.get("spatial_f1")
+                sp_roc = metrics.get("spatial_roc_auc")
+                sp_pr = metrics.get("spatial_pr_auc")
+
+                def _fmt(v: object) -> str:
+                    return f"{v:.4f}" if isinstance(v, (int, float)) else "n/a"
+
+                parts.append(f"sp_prev={_fmt(sp_prev)}")
+                parts.append(f"sp_f1={_fmt(sp_f1)}")
+                parts.append(f"sp_roc={_fmt(sp_roc)}")
+                parts.append(f"sp_pr={_fmt(sp_pr)}")
         typer.echo("  ".join(parts))
 
     typer.echo("=" * 72)
