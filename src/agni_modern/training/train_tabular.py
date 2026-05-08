@@ -38,7 +38,12 @@ from agni_modern.training.calibration import (
     threshold_path_for,
 )
 from agni_modern.training.dataset import infer_feature_columns
-from agni_modern.training.utils import save_metrics, set_global_seed
+from agni_modern.training.utils import (
+    feature_cols_path_for,
+    save_feature_cols,
+    save_metrics,
+    set_global_seed,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +146,7 @@ def train_tabular_occurrence(
     metrics["train_nan_rate"] = float(train_df[feature_cols].isna().mean().mean())
 
     model.save(output_model_path)
+    save_feature_cols(feature_cols, feature_cols_path_for(output_model_path))
     save_metrics(metrics, output_metrics_path)
 
     if output_predictions_path is not None:
@@ -209,6 +215,7 @@ def train_tabular_severity_classification(
     )
 
     model.save(output_model_path)
+    save_feature_cols(feature_cols, feature_cols_path_for(output_model_path))
     save_metrics(metrics, output_metrics_path)
 
     if output_predictions_path is not None:
@@ -264,6 +271,7 @@ def train_tabular_severity_regression(
     metrics["y_pred_std"] = float(np.std(y_pred))
 
     model.save(output_model_path)
+    save_feature_cols(feature_cols, feature_cols_path_for(output_model_path))
     save_metrics(metrics, output_metrics_path)
 
     if output_predictions_path is not None:

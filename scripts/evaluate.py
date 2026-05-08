@@ -42,10 +42,10 @@ def main(
     config: str,
     scan_all: bool = typer.Option(False, "--scan-all", help="Evaluate all experiments in metrics_dir, not just the one named in the config."),
     spatial_holdout: list[str] = typer.Option([], "--spatial-holdout", help="Patch-ID prefixes to use as spatial holdout subset."),
-    set: list[str] | None = typer.Option(None, "--set"),
+    overrides: list[str] | None = typer.Option(None, "--set"),
 ) -> None:
     """Evaluate all saved predictions for an experiment (or all experiments)."""
-    cfg = load_experiment_config(config, overrides=set)
+    cfg = load_experiment_config(config, overrides=overrides)
     metrics_dir = Path(cfg.outputs.metrics_dir)
     cal_bins = cfg.eval.calibration_bins
     topk_values = cfg.eval.top_k_values

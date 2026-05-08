@@ -15,9 +15,9 @@ app = typer.Typer(add_completion=False)
 
 
 @app.command()
-def main(config: str, set: list[str] | None = typer.Option(None, "--set")) -> None:
+def main(config: str, overrides: list[str] | None = typer.Option(None, "--set")) -> None:
     """Train temporal transformer and save checkpoint + metrics."""
-    cfg = load_experiment_config(config, overrides=set)
+    cfg = load_experiment_config(config, overrides=overrides)
     df = pd.read_parquet(cfg.data.io.dataset_path)
 
     train_df, val_df, test_df = temporal_holdout_split(

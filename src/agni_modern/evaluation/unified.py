@@ -5,9 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import logging
+
 import numpy as np
 import pandas as pd
-from sklearn.metrics import precision_recall_curve  # type: ignore
 
 from agni_modern.evaluation.calibration import expected_calibration_error
 from agni_modern.evaluation.metrics_occurrence import occurrence_metrics
@@ -16,27 +17,15 @@ from agni_modern.evaluation.metrics_severity import (
     severity_regression_metrics,
 )
 from agni_modern.evaluation.risk_ranking import topk_recall
+from agni_modern.training.calibration import find_optimal_f1_threshold
+
+logger = logging.getLogger(__name__)
 
 _SEV_CLS_HINTS = ("severity_cls", "sev_cls")
 _SEV_REG_HINTS = ("severity_reg", "sev_reg")
 
-
-def _optimal_f1_threshold(y_true: np.ndarray, y_prob: np.ndarray) -> tuple[float, float]:
-    """Find the probability threshold that maximises F1.
-
-    Returns (best_threshold, best_f1).
-    """
-    if len(np.unique(y_true)) < 2:
-        return 0.5, 0.0
-    precision, recall, thresholds = precision_recall_curve(y_true, y_prob)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        f1_scores = np.where(
-            (precision + recall) > 0,
-            2 * precision * recall / (precision + recall),
-            0.0,
-        )
-    idx = int(np.argmax(f1_scores[:-1]))
-    return float(thresholds[idx]), float(f1_scores[idx])
+# Backward-compatible alias used by older imports.
+_optimal_f1_threshold = find_optimal_f1_threshold
 
 
 def infer_task_type(pred_df: pd.DataFrame, model_name: str = "") -> str:
@@ -85,7 +74,7 @@ def evaluate_occurrence_predictions(
     metrics["prevalence"] = float(y_true.mean())
 
     # Oracle thresholds: maximising F1 on *this* slice (typically test) — not for deployment.
-    oracle_t_raw, oracle_f_raw = _optimal_f1_threshold(y_true, y_prob)
+    oracle_t_raw, oracle_f_raw = find_optimal_f1_threshold(y_true, y_prob)
     metrics["optimal_threshold"] = oracle_t_raw
     metrics["optimal_f1"] = oracle_f_raw
     metrics["oracle_threshold_raw"] = oracle_t_raw
@@ -105,7 +94,7 @@ def evaluate_occurrence_predictions(
         metrics["f1_calibrated"] = cal_metrics["f1"]
         metrics["roc_auc_calibrated"] = cal_metrics["roc_auc"]
 
-        ot_cal, of_cal = _optimal_f1_threshold(y_true, y_prob_cal)
+        ot_cal, of_cal = find_optimal_f1_threshold(y_true, y_prob_cal)
         metrics["oracle_threshold_calibrated"] = ot_cal
         metrics["oracle_f1_calibrated"] = of_cal
 
@@ -169,9 +158,23 @@ def evaluate_combined_risk(
 ) -> dict[str, Any]:
     """Evaluate combined expected risk = P(fire) * severity on joined rows.
 
-    Joins on (patch_id, reference_date). Only rows present in both DataFrames
-    are included — typically the fire-positive subset of the test set.
+    Inner-joins on (patch_id, reference_date). Because severity predictions are
+    only produced on ``y_sev_available==1`` rows (already-fire-positive subset
+    of the test set by construction), the joined frame is effectively
+    restricted to fire-positive rows.  The reported risk-ranking metrics are
+    therefore *severity-conditional*: they measure how well the combined score
+    ranks severity within the fire-positive population, not across all rows.
+
+    For full operational risk ranking (across both fire and non-fire rows) use
+    ``run_inference``, which produces per-row ``expected_risk`` from
+    ``p_fire * severity_conditional``.
     """
+    if "patch_id" not in sev_pred_df.columns or "reference_date" not in sev_pred_df.columns:
+        logger.warning(
+            "evaluate_combined_risk: severity predictions are missing join keys; skipping."
+        )
+        return {"task": "combined_risk", "combined_risk_n": 0}
+
     merged = occ_pred_df.merge(
         sev_pred_df[["patch_id", "reference_date", "y_pred"]].rename(
             columns={"y_pred": "sev_pred"}
@@ -181,6 +184,9 @@ def evaluate_combined_risk(
     )
 
     if merged.empty:
+        logger.warning(
+            "evaluate_combined_risk: 0 rows after joining occurrence/severity predictions."
+        )
         return {"task": "combined_risk", "combined_risk_n": 0}
 
     prob_col = "y_prob_calibrated" if "y_prob_calibrated" in merged.columns else "y_prob"
@@ -190,6 +196,7 @@ def evaluate_combined_risk(
     metrics: dict[str, Any] = {
         "task": "combined_risk",
         "combined_risk_n": len(merged),
+        "combined_risk_subset": "severity_available_intersection",
         "expected_risk_mean": float(np.mean(expected_risk)),
         "expected_risk_std": float(np.std(expected_risk)),
     }

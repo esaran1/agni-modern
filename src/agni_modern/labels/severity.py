@@ -165,8 +165,11 @@ def build_severity_labels(
     thresholds = thresholds or SeverityThresholds()
     clipped = max(min_dnbr, min(dnbr, max_dnbr))
 
+    # Classification uses the same clipped value as regression so that the two
+    # targets always agree (otherwise extreme dNBR rows would produce class==2
+    # while the regression target was clipped below the high-severity cutoff).
     return {
         "y_sev_reg": float(clipped),
-        "y_sev_cls": severity_class_from_dnbr(dnbr, thresholds),
+        "y_sev_cls": severity_class_from_dnbr(clipped, thresholds),
         "y_sev_available": 1,
     }

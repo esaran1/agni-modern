@@ -18,7 +18,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import QuantileTransformer, StandardScaler
+from sklearn.preprocessing import QuantileTransformer
 
 from agni_modern.models.base import ModelWrapper
 
@@ -94,6 +94,7 @@ class RandomForestWrapper(ModelWrapper):
         self.params = dict(params or {})
         self.params.setdefault("class_weight", "balanced")
         self.params.setdefault("n_estimators", 200)
+        self.params.setdefault("random_state", 42)
         self.model = Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
             ("clf", RandomForestClassifier(**self.params)),

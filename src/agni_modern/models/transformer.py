@@ -89,9 +89,22 @@ def multitask_loss(
     sev_available_mask: Tensor,
     occurrence_weight: float = 1.0,
     severity_weight: float = 0.5,
+    pos_weight: Tensor | float | None = None,
 ) -> Tensor:
-    """Compute multitask loss with severity masked for non-fire rows."""
-    bce = nn.BCEWithLogitsLoss()
+    """Compute multitask loss with severity masked for non-fire rows.
+
+    Parameters
+    ----------
+    pos_weight
+        Positive-class weight passed to :class:`~torch.nn.BCEWithLogitsLoss`.
+        When the occurrence label is highly imbalanced (typical for fire
+        forecasting), an unweighted BCE collapses to predicting all-zeros and
+        the model learns nothing useful.  Pass ``n_neg / n_pos`` of the
+        training set so positive examples receive proportional gradient.
+    """
+    if pos_weight is not None and not isinstance(pos_weight, Tensor):
+        pos_weight = torch.as_tensor(float(pos_weight), device=y_occ.device)
+    bce = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     mse = nn.MSELoss(reduction="none")
 
     occ_loss = bce(outputs["occurrence_logit"], y_occ.float())

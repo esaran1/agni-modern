@@ -21,6 +21,8 @@ import numpy as np
 from sklearn.isotonic import IsotonicRegression
 from sklearn.metrics import precision_recall_curve
 
+from agni_modern.training.utils import atomic_write_bytes, atomic_write_text
+
 
 def calibrator_path_for(model_path: Path) -> Path:
     """Derive the calibrator file path from a model path."""
@@ -64,10 +66,8 @@ def apply_calibrator(
 
 
 def save_calibrator(calibrator: IsotonicRegression, path: Path) -> None:
-    """Persist calibrator to disk."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("wb") as f:
-        pickle.dump(calibrator, f)
+    """Persist calibrator to disk atomically."""
+    atomic_write_bytes(path, pickle.dumps(calibrator))
 
 
 def load_calibrator(path: Path) -> IsotonicRegression:
@@ -103,11 +103,10 @@ def find_optimal_f1_threshold(
 
 
 def save_threshold(threshold: float, val_f1: float, path: Path) -> None:
-    """Persist optimal threshold to JSON."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
+    """Persist optimal threshold to JSON atomically."""
+    atomic_write_text(
+        path,
         json.dumps({"threshold": threshold, "val_f1_at_threshold": val_f1}, indent=2),
-        encoding="utf-8",
     )
 
 

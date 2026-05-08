@@ -23,7 +23,12 @@ from agni_modern.training.calibration import (
     threshold_path_for,
 )
 from agni_modern.training.dataset import PatchSequenceDataset, infer_feature_columns
-from agni_modern.training.utils import save_metrics, set_global_seed
+from agni_modern.training.utils import (
+    feature_cols_path_for,
+    save_feature_cols,
+    save_metrics,
+    set_global_seed,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -39,20 +44,24 @@ def _run_train_epoch(
     sev_weight: float,
     grad_clip_norm: float,
     device: torch.device,
+    pos_weight: torch.Tensor | None = None,
 ) -> float:
     """Run one training epoch and return average loss."""
     model.train()
     total_loss = 0.0
     n_batches = 0
-    for x, y_occ, y_sev, y_mask in loader:
+    for x, pad_mask, y_occ, y_sev, y_mask in loader:
         x = x.to(device)
+        pad_mask = pad_mask.to(device)
         y_occ = y_occ.to(device)
         y_sev = y_sev.to(device)
         y_mask = y_mask.to(device)
 
         optimizer.zero_grad()
-        outputs = model(x)
-        loss = multitask_loss(outputs, y_occ, y_sev, y_mask, occ_weight, sev_weight)
+        outputs = model(x, padding_mask=pad_mask)
+        loss = multitask_loss(
+            outputs, y_occ, y_sev, y_mask, occ_weight, sev_weight, pos_weight=pos_weight,
+        )
         loss.backward()
         if grad_clip_norm > 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
@@ -70,6 +79,7 @@ def _evaluate(
     occ_weight: float,
     sev_weight: float,
     device: torch.device,
+    pos_weight: torch.Tensor | None = None,
 ) -> tuple[float, dict[str, float], np.ndarray, np.ndarray, np.ndarray]:
     """Evaluate on a DataLoader.
 
@@ -88,14 +98,17 @@ def _evaluate(
     all_true: list[torch.Tensor] = []
     all_sev: list[torch.Tensor] = []
 
-    for x, y_occ, y_sev, y_mask in loader:
+    for x, pad_mask, y_occ, y_sev, y_mask in loader:
         x = x.to(device)
+        pad_mask = pad_mask.to(device)
         y_occ = y_occ.to(device)
         y_sev = y_sev.to(device)
         y_mask = y_mask.to(device)
 
-        outputs = model(x)
-        loss = multitask_loss(outputs, y_occ, y_sev, y_mask, occ_weight, sev_weight)
+        outputs = model(x, padding_mask=pad_mask)
+        loss = multitask_loss(
+            outputs, y_occ, y_sev, y_mask, occ_weight, sev_weight, pos_weight=pos_weight,
+        )
         total_loss += loss.item()
         n_batches += 1
 
@@ -164,12 +177,25 @@ def train_transformer_multitask(
     occ_weight = float(params.get("occurrence_weight", 1.0))
     sev_weight = float(params.get("severity_weight", 0.5))
 
-    # ---- datasets / loaders ----
+    # ---- datasets / loaders (val/test reuse training medians, not their own) ----
     train_ds = PatchSequenceDataset(train_df, feature_cols, seq_len=seq_len, occ_col=target_col)
-    val_ds = PatchSequenceDataset(val_df, feature_cols, seq_len=seq_len, occ_col=target_col)
+    val_ds = PatchSequenceDataset(
+        val_df, feature_cols, seq_len=seq_len, occ_col=target_col,
+        feature_medians=train_ds.feature_medians,
+    )
 
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
+
+    # ---- positive-class weighting from training prevalence ----
+    n_pos = float((train_df[target_col] == 1).sum())
+    n_neg = float((train_df[target_col] == 0).sum())
+    pos_weight_value = float(params.get("pos_weight", 0.0))
+    if pos_weight_value <= 0.0 and n_pos > 0:
+        pos_weight_value = n_neg / n_pos
+    pos_weight_tensor = (
+        torch.tensor(pos_weight_value, device=dev) if pos_weight_value > 0 else None
+    )
 
     # ---- model / optimizer / scheduler ----
     model_cfg = TransformerConfig(
@@ -195,8 +221,11 @@ def train_transformer_multitask(
     for epoch in range(1, max_epochs + 1):
         train_loss = _run_train_epoch(
             model, train_loader, optimizer, occ_weight, sev_weight, grad_clip_norm, dev,
+            pos_weight=pos_weight_tensor,
         )
-        val_loss, val_occ_m, _, _, _ = _evaluate(model, val_loader, occ_weight, sev_weight, dev)
+        val_loss, val_occ_m, _, _, _ = _evaluate(
+            model, val_loader, occ_weight, sev_weight, dev, pos_weight=pos_weight_tensor,
+        )
         scheduler.step()
 
         current_lr = optimizer.param_groups[0]["lr"]
@@ -236,16 +265,22 @@ def train_transformer_multitask(
 
     output_model_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), output_model_path)
+    save_feature_cols(feature_cols, feature_cols_path_for(output_model_path))
 
     final: dict[str, object] = {
         "best_val_loss": round(best_val_loss, 6),
         "total_epochs": len(history),
         "early_stopped": epochs_no_improve >= patience,
+        "n_features": len(feature_cols),
+        "n_train": len(train_df),
+        "n_val": len(val_df),
+        "train_positive_rate": float(n_pos / max(n_pos + n_neg, 1.0)),
+        "pos_weight": float(pos_weight_value) if pos_weight_value > 0 else None,
     }
 
     # ---- validation-set isotonic calibration + deployment threshold (tabular parity) ----
     _, _, val_probs, val_true_arr, _ = _evaluate(
-        model, val_loader, occ_weight, sev_weight, dev,
+        model, val_loader, occ_weight, sev_weight, dev, pos_weight=pos_weight_tensor,
     )
     deployment_threshold = 0.5
     if len(val_probs) > 0 and len(np.unique(val_true_arr)) >= 2:
@@ -265,10 +300,13 @@ def train_transformer_multitask(
 
     # ---- test-set evaluation ----
     if test_df is not None and not test_df.empty:
-        test_ds = PatchSequenceDataset(test_df, feature_cols, seq_len=seq_len, occ_col=target_col)
+        test_ds = PatchSequenceDataset(
+            test_df, feature_cols, seq_len=seq_len, occ_col=target_col,
+            feature_medians=train_ds.feature_medians,
+        )
         test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
         test_loss, test_occ_m, test_probs, test_true, test_sev = _evaluate(
-            model, test_loader, occ_weight, sev_weight, dev,
+            model, test_loader, occ_weight, sev_weight, dev, pos_weight=pos_weight_tensor,
         )
         final["test_loss"] = round(test_loss, 6)
         for k, v in test_occ_m.items():

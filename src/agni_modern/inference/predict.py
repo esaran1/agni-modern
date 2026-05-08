@@ -32,6 +32,7 @@ from agni_modern.training.calibration import (
     try_load_threshold,
 )
 from agni_modern.training.dataset import infer_feature_columns
+from agni_modern.training.utils import feature_cols_path_for, load_feature_cols
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,26 @@ def compute_expected_risk(p_fire: pd.Series, severity_conditional: pd.Series) ->
     return p_fire * severity_conditional
 
 
+def _resolve_feature_cols(df: pd.DataFrame, model_path: Path | None) -> list[str]:
+    """Prefer the feature_cols sidecar saved at training time; fall back to inference.
+
+    Using the sidecar guarantees the inference DataFrame is sliced into
+    *exactly* the feature set (and order) the model was fit on, even if the
+    Parquet has acquired new columns since training.
+    """
+    if model_path is not None:
+        saved = load_feature_cols(feature_cols_path_for(model_path))
+        if saved is not None:
+            missing = [c for c in saved if c not in df.columns]
+            if missing:
+                raise ValueError(
+                    "Inference DataFrame is missing features the model was trained on: "
+                    f"{missing[:8]}{' ...' if len(missing) > 8 else ''}"
+                )
+            return saved
+    return infer_feature_columns(df)
+
+
 def run_inference(
     df: pd.DataFrame,
     occurrence_model: ModelWrapper,
@@ -82,7 +103,7 @@ def run_inference(
       severity_conditional, expected_risk
       plus centroid_lat/lon if available.
     """
-    feature_cols = infer_feature_columns(df)
+    feature_cols = _resolve_feature_cols(df, occurrence_model_path)
     features = df[feature_cols]
 
     p_fire_raw = occurrence_model.predict_proba(features)

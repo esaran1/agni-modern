@@ -11,6 +11,7 @@ dist/
 
 # Virtual envs
 .venv/
+.venv311/
 venv/
 env/
 
@@ -47,10 +48,14 @@ outputs/models/*
 outputs/metrics/*
 outputs/maps/*
 outputs/figures/*
+outputs/plots/*
+outputs/predictions/*
 !outputs/models/.gitkeep
 !outputs/metrics/.gitkeep
 !outputs/maps/.gitkeep
 !outputs/figures/.gitkeep
+!outputs/plots/.gitkeep
+!outputs/predictions/.gitkeep
 
 # OS/editor junk
 .DS_Store
